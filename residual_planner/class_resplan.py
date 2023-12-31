@@ -5,6 +5,7 @@ import pandas as pd
 import cvxpy as cp
 import time
 from scipy.sparse import csr_matrix
+from cdp2adp import *
 
 
 """
@@ -30,7 +31,7 @@ def mult_kron_vec(mat_ls, vec):
     return X.reshape(row, -1)
 
 
-def find_var_max(coeff, A, b):
+def find_var_max(coeff, A, b, pcost):
     """Solve the fitness-for-use optimization problem.
 
     min sum(coeff / x)
@@ -43,17 +44,17 @@ def find_var_max(coeff, A, b):
     obj = cp.Minimize(cp.sum(coeff @ cp.inv_pos(x)))
     prob = cp.Problem(obj, constraints)
     prob.solve()
-    return x.value, obj.value
+    return x.value / pcost, obj.value * pcost
 
 
-def find_var_sum_cauchy(var, pcost):
+def find_var_sum_cauchy(var, pcoeff, c):
     """Solve the sum-of-variance optimization problem.
 
-    min sum(var @ 1/x)
-    s.t. sum(pcost @ x) == 1
+    min sum(var @ x)
+    s.t. sum(pcoeff @ 1/x) == c
     """
-    T = np.sum(np.sqrt(var*pcost))**2
-    x = np.sqrt(pcost / var * T)
+    T = np.sum(np.sqrt(var * pcoeff))**2 / c
+    x = np.sqrt(T * pcoeff / (c * var))
     return x, T
 
 
@@ -89,8 +90,9 @@ class Mechanism:
         self.covar = None
         self.noisy_answer = None
         cur_domains = [self.domains[at] for at in att]
-        self.num_queries = np.multiply.reduce([c + 0.0 for c in cur_domains])
+        self.num_queries = np.prod([c + 0.0 for c in cur_domains])
         self.variance = None
+        self.true_answer = None
         pass
 
     def output_bound(self):
@@ -98,6 +100,9 @@ class Mechanism:
 
     def input_answer(self, answer):
         self.noisy_answer = answer
+
+    def input_true_answer(self, answer):
+        self.true_answer = answer
 
     def get_num_queries(self):
         return self.num_queries
@@ -107,6 +112,12 @@ class Mechanism:
 
     def output_variance(self):
         return self.variance
+
+    def get_noisy_answer(self):
+        return self.noisy_answer
+
+    def get_true_answer(self):
+        return self.true_answer
 
     pass
 
@@ -126,6 +137,8 @@ class ResMech:
         self.calculated = False
         self.recon_answer = None
         self.noisy_answer = None
+        self.true_answer = None
+        self.true_recon_answer = None
 
     def get_core_matrix(self):
         att_set = set(list(self.att))
@@ -164,14 +177,20 @@ class ResMech:
             datavector = datavector.flatten()
             sparse_vec = csr_matrix(datavector)
         true_answer = mult_kron_vec(self.res_mat_list, sparse_vec)
-        col_size = np.multiply.reduce(sub_domains).astype(int)
+        col_size = np.prod(sub_domains).astype(int)
         rd = np.sqrt(self.noise_level) * np.random.normal(size=[col_size, 1])
         cov_rd = mult_kron_vec(self.res_mat_list, rd)
         self.noisy_answer = true_answer + cov_rd
+        # todo: move it to class Mechnism
+        self.true_answer = true_answer + np.zeros_like(cov_rd)
 
     def get_recon_answer(self, mat_list):
         self.recon_answer = mult_kron_vec(mat_list, self.noisy_answer)
         return self.recon_answer
+
+    def get_trueres_answer(self, mat_list):
+        self.true_recon_answer = mult_kron_vec(mat_list, self.true_answer)
+        return self.true_recon_answer
 
 
 class ResidualPlanner:
@@ -207,19 +226,19 @@ class ResidualPlanner:
         for subset in att_subsets:
             if subset not in self.res_dict:
                 sub_domains = [self.domains[at] for at in subset]
-                pcost_coeff = np.multiply.reduce([(c - 1) / c for c in sub_domains])
+                pcost_coeff = np.prod([(c - 1) / c for c in sub_domains])
                 self.pcost_coeff[subset] = pcost_coeff
                 res_mech = ResMech(self.domains, subset)
                 self.res_dict[subset] = res_mech
         for subset in att_subsets:
             sub_domains = [self.domains[at] for at in subset]
             # be careful of the numerical overflow
-            var_coeff = np.multiply.reduce([(c - 1) / c for c in sub_domains])
+            var_coeff = np.prod([(c - 1) / c for c in sub_domains])
             div_list = []
             for at in att:
                 if at not in subset:
                     div_list.append(1.0 / self.domains[at] ** 2)
-            divisor = np.multiply.reduce(div_list)
+            divisor = np.prod(div_list)
             var_coeff = var_coeff * divisor
 
             self.var_coeff[att, subset] = var_coeff
@@ -279,13 +298,13 @@ class ResidualPlanner:
                 var_coeff[idx] += self.var_coeff[mech_att, res_att] * num_of_queries
         return var_coeff, pcost_coeff
 
-    def selection(self, choice='sumvar'):
+    def selection(self, choice='sumvar', pcost=1):
         if choice == 'sumvar':
             var_coeff, pcost_coeff = self.get_coeff_sum_var()
-            sigma_square, obj = find_var_sum_cauchy(var_coeff, pcost_coeff)
+            sigma_square, obj = find_var_sum_cauchy(var_coeff, pcost_coeff, pcost)
         elif choice == 'maxvar':
             coeff, A, b = self.get_coeff_maxvar()
-            sigma_square, obj = find_var_max(coeff, A, b)
+            sigma_square, obj = find_var_max(coeff, A, b, pcost)
         else:
             print("Invalid choice!")
             return 0
@@ -315,6 +334,8 @@ class ResidualPlanner:
             mech = self.mech_dict[att]
             att_subsets = all_subsets(att)
             noisy_answer = 0.0
+            # todo: move it to class Mechanism
+            true_answer = 0.0
             for subset in att_subsets:
                 res_mech = self.res_dict[subset]
                 mat_list = []
@@ -330,7 +351,11 @@ class ResidualPlanner:
 
                 recon_answer = res_mech.get_recon_answer(mat_list)
                 noisy_answer += recon_answer
+
+                recon_true = res_mech.get_trueres_answer(mat_list)
+                true_answer += recon_true
             mech.input_answer(noisy_answer)
+            mech.input_true_answer(true_answer)
 
     def reconstruct_covariance(self):
         for att in self.mech_dict.keys():
@@ -353,6 +378,29 @@ class ResidualPlanner:
             max_var = max(max_var, var)
         return max_var
 
+    def get_mean_l1_error(self):
+        error_list = []
+        N = 48842
+        for att in self.mech_dict.keys():
+            mech = self.mech_dict[att]
+            noisy_answer = mech.get_noisy_answer()
+            true_answer = mech.get_true_answer()
+            l1_error = np.sum(np.abs(noisy_answer - true_answer))
+            error_list.append(l1_error / N)
+        mean_error = np.mean(error_list)
+        return mean_error
+
+    def get_mean_l2_error(self):
+        error_list = []
+        N = len(self.data)
+        for att in self.mech_dict.keys():
+            mech = self.mech_dict[att]
+            noisy_answer = mech.get_noisy_answer()
+            true_answer = mech.get_true_answer()
+            l2_error = np.sum(np.square(noisy_answer - true_answer))
+            error_list.append(l2_error / N)
+        mean_error = np.mean(error_list)
+        return np.sqrt(mean_error)
 
 def test_Adult():
     domains = [85, 9, 100, 16, 7, 15, 6, 5, 2, 100, 100, 99, 42, 2]
@@ -362,36 +410,61 @@ def test_Adult():
     system = ResidualPlanner(domains)
     data = pd.read_csv("adult.csv")
     system.input_data(data, col_names)
+    print("Len of adult dataset: ", len(data))
 
     att = tuple(range(len(domains)))
     total = 0
-    for i in range(0, 4):
+    for i in range(3, 4):
         subset_i = list(itertools.combinations(att, i))
         print("Num of " + str(i) + "-way marginals: ", len(subset_i))
         for subset in subset_i:
-            system.input_mech(subset, 1**(3-i))
+            system.input_mech(subset, var_bound=1)
             cur_domains = [domains[c] for c in subset]
             total += np.multiply.reduce(cur_domains)
     print("Total num of queries: ", total, "\n")
     return system, total
 
 
+def test_Adult_small():
+    domains = [16, 32, 9, 32, 16, 7, 15, 6, 5, 2, 32, 32, 32, 42, 2]
+    col_names = ['age', 'workclass', 'fnlwgt', 'education', 'education-num', 'marital-status',
+       'occupation', 'relationship', 'race', 'sex', 'capital-gain',
+       'capital-loss', 'hours-per-week', 'native-country', 'income>50K']
+    system = ResidualPlanner(domains)
+    data = pd.read_csv("adult_small.csv")
+    system.input_data(data, col_names)
+    print("Len of adult dataset: ", len(data))
+
+    att = tuple(range(len(domains)))
+    total = 0
+    for i in range(3, 4):
+        subset_i = list(itertools.combinations(att, i))
+        print("Num of " + str(i) + "-way marginals: ", len(subset_i))
+        for subset in subset_i:
+            system.input_mech(subset, var_bound=1)
+            cur_domains = [domains[c] for c in subset]
+            total += np.prod(cur_domains)
+    print("Total num of queries: ", total, "\n")
+    return system, total
+
+
 if __name__ == '__main__':
     start = time.time()
-    system, total = test_Adult()
-    sum_var = system.selection(choice="sumvar")
-    system.measurement()
-    system.reconstruction()
-    print("Sum of variance: ", sum_var)
+    ep_ls = [1.0]
 
-    # pcost = 0.23670196533203125 if using (epsilon, delta) = (1, 1e-6) differential privacy
-    pcost = 1
-    rmse = np.sqrt(sum_var / total) / pcost
-    print("Root mean squared error: ", rmse)
+    for eps in ep_ls:
+        delta = 1e-9
+        rho = cdp_rho(eps, delta)
+        pcost = rho * 2
+
+        system, total = test_Adult_small()
+        sum_var = system.selection(choice="sumvar", pcost=pcost)
+        system.measurement()
+        system.reconstruction()
+        l1_error = system.get_mean_l1_error()
+        print("Mean L1 Error: ", l1_error)
 
     end = time.time()
-    print("total time: ", end - start)
-
 
 
 
