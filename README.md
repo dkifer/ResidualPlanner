@@ -22,6 +22,8 @@ from class_resplan import ResidualPlanner
 # specify domains size and column name for each attribute in the dataset
 domains = [10] * 5
 col_names = ['0', '1', '2', '3', '4']
+# privacy budget for rho-zcdp
+rho = 1
 system = ResidualPlanner(domains)
 
 # choose marginals, (0, ) represents an 1-way marginal on the first attribute
@@ -37,7 +39,7 @@ system.input_data(data, col_names)
 # select, measure and reconstruct
 # choice="sumvar" ==> optimize sum of variance
 # choice="maxvar" ==> optimize max variance
-sum_var = system.selection(choice="sumvar")
+sum_var = system.selection(choice="sumvar", pcost=2*rho)
 system.measurement()
 system.reconstruction()
 ```
