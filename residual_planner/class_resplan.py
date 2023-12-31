@@ -98,7 +98,7 @@ class Mechanism:
     def output_bound(self):
         return self.var_bound
 
-    def input_answer(self, answer):
+    def input_noisy_answer(self, answer):
         self.noisy_answer = answer
 
     def input_true_answer(self, answer):
@@ -188,7 +188,7 @@ class ResMech:
         self.recon_answer = mult_kron_vec(mat_list, self.noisy_answer)
         return self.recon_answer
 
-    def get_trueres_answer(self, mat_list):
+    def get_origin_answer(self, mat_list):
         self.true_recon_answer = mult_kron_vec(mat_list, self.true_answer)
         return self.true_recon_answer
 
@@ -352,9 +352,9 @@ class ResidualPlanner:
                 recon_answer = res_mech.get_recon_answer(mat_list)
                 noisy_answer += recon_answer
 
-                recon_true = res_mech.get_trueres_answer(mat_list)
+                recon_true = res_mech.get_origin_answer(mat_list)
                 true_answer += recon_true
-            mech.input_answer(noisy_answer)
+            mech.input_noisy_answer(noisy_answer)
             mech.input_true_answer(true_answer)
 
     def reconstruct_covariance(self):
@@ -380,7 +380,7 @@ class ResidualPlanner:
 
     def get_mean_l1_error(self):
         error_list = []
-        N = 48842
+        N = len(self.data)
         for att in self.mech_dict.keys():
             mech = self.mech_dict[att]
             noisy_answer = mech.get_noisy_answer()
@@ -433,18 +433,18 @@ def test_Adult_small():
     system = ResidualPlanner(domains)
     data = pd.read_csv("adult_small.csv")
     system.input_data(data, col_names)
-    print("Len of adult dataset: ", len(data))
+    # print("Len of adult dataset: ", len(data))
 
     att = tuple(range(len(domains)))
     total = 0
     for i in range(3, 4):
         subset_i = list(itertools.combinations(att, i))
-        print("Num of " + str(i) + "-way marginals: ", len(subset_i))
+        # print("Num of " + str(i) + "-way marginals: ", len(subset_i))
         for subset in subset_i:
             system.input_mech(subset, var_bound=1)
             cur_domains = [domains[c] for c in subset]
             total += np.prod(cur_domains)
-    print("Total num of queries: ", total, "\n")
+    # print("Total num of queries: ", total, "\n")
     return system, total
 
 
@@ -453,6 +453,7 @@ if __name__ == '__main__':
     ep_ls = [1.0]
 
     for eps in ep_ls:
+        print("------------------- ep: ", eps, "------------------")
         delta = 1e-9
         rho = cdp_rho(eps, delta)
         pcost = rho * 2
