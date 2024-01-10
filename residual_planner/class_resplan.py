@@ -378,29 +378,18 @@ class ResidualPlanner:
             max_var = max(max_var, var)
         return max_var
 
-    def get_mean_l1_error(self):
+    def get_mean_error(self, ord=1):
         error_list = []
         N = len(self.data)
-        for att in self.mech_dict.keys():
+        for att in self.mech_dict:
             mech = self.mech_dict[att]
             noisy_answer = mech.get_noisy_answer()
             true_answer = mech.get_true_answer()
-            l1_error = np.sum(np.abs(noisy_answer - true_answer))
-            error_list.append(l1_error / N)
+            l_error = np.linalg.norm(noisy_answer - true_answer, ord=ord)
+            error_list.append(l_error / N)
         mean_error = np.mean(error_list)
         return mean_error
 
-    def get_mean_l2_error(self):
-        error_list = []
-        N = len(self.data)
-        for att in self.mech_dict.keys():
-            mech = self.mech_dict[att]
-            noisy_answer = mech.get_noisy_answer()
-            true_answer = mech.get_true_answer()
-            l2_error = np.sum(np.square(noisy_answer - true_answer))
-            error_list.append(l2_error / N)
-        mean_error = np.mean(error_list)
-        return np.sqrt(mean_error)
 
 def test_Adult():
     domains = [85, 9, 100, 16, 7, 15, 6, 5, 2, 100, 100, 99, 42, 2]
@@ -450,7 +439,7 @@ def test_Adult_small():
 
 if __name__ == '__main__':
     start = time.time()
-    ep_ls = [1.0]
+    ep_ls = [0.03, 0.1, 0.31, 1.0, 3.16, 10]
 
     for eps in ep_ls:
         print("------------------- ep: ", eps, "------------------")
@@ -462,8 +451,8 @@ if __name__ == '__main__':
         sum_var = system.selection(choice="sumvar", pcost=pcost)
         system.measurement()
         system.reconstruction()
-        l1_error = system.get_mean_l1_error()
-        print("Mean L1 Error: ", l1_error)
+        l_error = system.get_mean_error(ord=1)
+        print("Mean Error: ", l_error)
 
     end = time.time()
 
