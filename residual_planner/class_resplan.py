@@ -313,6 +313,11 @@ class ResidualPlanner:
             att = self.id2res[i]
             res_mech = self.res_dict[att]
             res_mech.input_noise_level(noise_level)
+
+        # print("pcost: ", pcost_coeff)
+        # print("var: ", var_coeff)
+        # print("sigma square: ", sigma_square)
+        # print("dict: ", self.var_coeff)
         return obj
 
     def measurement(self):
@@ -414,29 +419,6 @@ def test_Adult():
     return system, total
 
 
-def test_Adult_small():
-    domains = [16, 32, 9, 32, 16, 7, 15, 6, 5, 2, 32, 32, 32, 42, 2]
-    col_names = ['age', 'workclass', 'fnlwgt', 'education', 'education-num', 'marital-status',
-       'occupation', 'relationship', 'race', 'sex', 'capital-gain',
-       'capital-loss', 'hours-per-week', 'native-country', 'income>50K']
-    system = ResidualPlanner(domains)
-    data = pd.read_csv("adult_small.csv")
-    system.input_data(data, col_names)
-    # print("Len of adult dataset: ", len(data))
-
-    att = tuple(range(len(domains)))
-    total = 0
-    for i in range(3, 4):
-        subset_i = list(itertools.combinations(att, i))
-        # print("Num of " + str(i) + "-way marginals: ", len(subset_i))
-        for subset in subset_i:
-            system.input_mech(subset, var_bound=1)
-            cur_domains = [domains[c] for c in subset]
-            total += np.prod(cur_domains)
-    # print("Total num of queries: ", total, "\n")
-    return system, total
-
-
 if __name__ == '__main__':
     start = time.time()
     ep_ls = [0.03, 0.1, 0.31, 1.0, 3.16, 10]
@@ -447,7 +429,7 @@ if __name__ == '__main__':
         rho = cdp_rho(eps, delta)
         pcost = rho * 2
 
-        system, total = test_Adult_small()
+        system, total = test_Adult()
         sum_var = system.selection(choice="sumvar", pcost=pcost)
         system.measurement()
         system.reconstruction()
