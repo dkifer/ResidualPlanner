@@ -31,7 +31,7 @@ def test_Adult_small():
 
 def compare_rho_empirical_error():
     start = time.time()
-    ep_ls = [0.03]
+    ep_ls = [0.03, 0.1, 0.5, 1, 2, 5]
 
     for eps in ep_ls:
         print("------------------- ep: ", eps, "------------------")
@@ -44,7 +44,11 @@ def compare_rho_empirical_error():
         system.measurement()
         system.reconstruction()
         l_error = system.get_mean_error(ord=1)
+        nonneg_error = system.get_error_nonneg(ord=1, consist=False)
+        consist_error = system.get_error_nonneg(ord=1, consist=True)
         print("Mean Error: ", l_error)
+        print("Nonneg Error: ", nonneg_error)
+        print("Consistent Error: ", consist_error)
 
     end = time.time()
     print("time needed: ", end-start)
@@ -71,5 +75,5 @@ def test_two_one_way():
 
 
 if __name__ == '__main__':
-    test_two_one_way()
+    compare_rho_empirical_error()
 

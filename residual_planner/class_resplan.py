@@ -395,6 +395,34 @@ class ResidualPlanner:
         mean_error = np.mean(error_list)
         return mean_error
 
+    def get_error_nonneg(self, ord=1, consist=True):
+        error_list = []
+        N = len(self.data)
+        if not consist:
+            for att in self.mech_dict:
+                mech = self.mech_dict[att]
+                noisy_answer = mech.get_noisy_answer()
+                noisy_nonneg_answer = np.maximum(noisy_answer, 0)
+                true_answer = mech.get_true_answer()
+                l_error = np.linalg.norm(noisy_nonneg_answer - true_answer, ord=ord)
+                error_list.append(l_error / N)
+            mean_error = np.mean(error_list)
+            return mean_error
+        else:
+            for att in self.mech_dict:
+                mech = self.mech_dict[att]
+                noisy_answer = mech.get_noisy_answer()
+                true_answer = mech.get_true_answer()
+                noisy_nonneg_answer = np.maximum(noisy_answer, 0)
+                true_sum = np.sum(true_answer)
+                nonneg_sum = np.sum(noisy_nonneg_answer)
+                scale = true_sum / nonneg_sum
+                noisy_consist_answer = noisy_nonneg_answer * scale
+                l_error = np.linalg.norm(noisy_consist_answer - true_answer, ord=ord)
+                error_list.append(l_error / N)
+            mean_error = np.mean(error_list)
+            return mean_error
+
 
 def test_Adult():
     domains = [85, 9, 100, 16, 7, 15, 6, 5, 2, 100, 100, 99, 42, 2]
