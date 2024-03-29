@@ -76,5 +76,22 @@ def test_two_one_way():
 
 
 if __name__ == '__main__':
-    compare_rho_empirical_error()
+    # compare_rho_empirical_error()
+    R = np.array([[1, -1, 0, 0],
+                  [1, 0, -1, 0],
+                  [1, 0, 0, -1]])
+    S = R @ R.T
+    S_inv = np.linalg.inv(S)
+    e1 = R[:, 1]
+    e2 = R[:, 2]
+    p_mat = R.T @ S_inv @ R
+    print("diagonal under unbounded dp", np.diag(p_mat))
 
+    diff = np.reshape(e1-e2, [3, 1])
+    diff_cost = diff.T @ S_inv @ diff
+
+    diff_R = np.array([[2, 1, 1, -1, -1, 0],
+                       [1, 2, 1, 1, 0, -1],
+                       [1, 1, 2, 0, 1, 1]])
+    diff_p_mat = diff_R.T @ S_inv @ diff_R
+    print("diagonal under bounded dp", np.diag(diff_p_mat))
