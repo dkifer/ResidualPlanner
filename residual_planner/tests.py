@@ -75,8 +75,7 @@ def test_two_one_way():
     return
 
 
-if __name__ == '__main__':
-    # compare_rho_empirical_error()
+def test1():
     R = np.array([[1, -1, 0, 0],
                   [1, 0, -1, 0],
                   [1, 0, 0, -1]])
@@ -95,3 +94,17 @@ if __name__ == '__main__':
                        [1, 1, 2, 0, 1, 1]])
     diff_p_mat = diff_R.T @ S_inv @ diff_R
     print("diagonal under bounded dp", np.diag(diff_p_mat))
+
+
+if __name__ == '__main__':
+    # compare_rho_empirical_error()
+    domains = [2, 2, 3]
+    system = ResidualPlanner(domains)
+
+    system.input_mech((0, 2))
+    # system.input_mech((1,))
+    pcost = 1
+    sum_var = system.selection(choice="sumvar", pcost=pcost)
+
+    print("sum-of-var is:", sum_var)
+    print("sigma squares are:", system.sigma_square)
