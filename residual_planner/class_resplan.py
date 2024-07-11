@@ -449,7 +449,7 @@ def test_Adult():
 
 if __name__ == '__main__':
     start = time.time()
-    ep_ls = [0.03, 0.1, 0.31, 1.0, 3.16, 10]
+    ep_ls = [1]
 
     for eps in ep_ls:
         print("------------------- ep: ", eps, "------------------")
@@ -458,13 +458,14 @@ if __name__ == '__main__':
         pcost = rho * 2
 
         system, total = test_Adult()
-        sum_var = system.selection(choice="sumvar", pcost=pcost)
+        sum_var = system.selection(choice="maxvar", pcost=pcost)
         system.measurement()
         system.reconstruction()
         l_error = system.get_mean_error(ord=1)
         print("Mean Error: ", l_error)
 
     end = time.time()
+    print("time: is", end-start)
 
 
 
