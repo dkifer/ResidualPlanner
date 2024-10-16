@@ -44,7 +44,7 @@ def find_var_max(coeff, A, b, pcost):
     obj = cp.Minimize(cp.sum(coeff @ cp.inv_pos(x)))
     prob = cp.Problem(obj, constraints)
     prob.solve()
-    return x.value / pcost, obj.value * pcost
+    return x.value / pcost * obj.value, obj.value * pcost
 
 
 def find_var_sum_cauchy(var, pcoeff, c):
