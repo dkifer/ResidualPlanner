@@ -61,8 +61,8 @@ def find_var_sum_cauchy(var, pcoeff, c):
 def subtract_matrix(k, is_sparse=True):
     """Return Subtraction matrix Sub_k."""
     mat = np.zeros([k-1, k])
+    mat[:, 0] = 1
     for i in range(k-1):
-        mat[i, i] = 1
         mat[i, i+1] = -1
     if is_sparse:
         return sp.csr_matrix(mat)
